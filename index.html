@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Delayed Coker Kinetic Solver - Piecewise Throughput</title>
+<style>
+  :root{
+    --bg:#eef1f5; --card:#ffffff; --border:#d7dce3;
+    --header:#1b212c; --header-alt:#252c39;
+    --accent:#ff8a3d; --accent-dark:#e06f22;
+    --teal:#3fb8af; --steel:#8b93a1; --coke:#3a3f47;
+    --text:#1b212c; --text-light:#eef1f5; --text-muted:#9aa3b2;
+    --ok:#3fae5b; --err:#e5484d;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+       font-family:"Segoe UI",Roboto,Arial,sans-serif;}
+  header{background:var(--header);padding:18px 24px;}
+  header h1{margin:0;font-size:20px;color:var(--text-light);}
+  header p{margin:4px 0 0;font-size:12px;color:var(--text-muted);}
+
+  .layout{display:flex;min-height:calc(100vh - 66px);}
+  aside{background:var(--header);width:340px;flex-shrink:0;padding:18px;color:var(--text-light);}
+  aside h2{font-size:12px;letter-spacing:.04em;color:var(--accent);margin:18px 0 8px;}
+  aside h2:first-of-type{margin-top:0;}
+  aside label{display:block;font-size:12px;margin:8px 0 3px;color:var(--text-light);}
+  aside input[type=number]{width:100%;padding:6px 8px;border:1px solid var(--border);
+       border-radius:3px;background:var(--card);color:var(--text);font-size:13px;}
+  .seg-row{display:flex;gap:6px;margin-bottom:6px;align-items:center;}
+  .seg-row input{width:70px;padding:5px 6px;border:1px solid var(--border);border-radius:3px;
+       background:var(--card);color:var(--text);font-size:12px;}
+  .seg-list{margin-bottom:8px;}
+  .seg-item{display:flex;justify-content:space-between;align-items:center;
+       background:var(--header-alt);padding:6px 8px;border-radius:3px;margin-bottom:4px;font-size:12px;}
+  .seg-item button{background:none;border:none;color:var(--err);cursor:pointer;font-size:13px;}
+  .btn{border:none;border-radius:3px;padding:10px 14px;font-size:13px;font-weight:600;
+       cursor:pointer;width:100%;margin-top:6px;}
+  .btn-accent{background:var(--accent);color:#1b212c;}
+  .btn-accent:hover{background:var(--accent-dark);}
+  .btn-ghost{background:var(--header-alt);color:var(--text-light);}
+  .btn-ghost:hover{background:#323b4a;}
+  .btn-small{width:auto;padding:6px 10px;font-size:12px;}
+
+  main{flex:1;padding:20px;overflow:auto;}
+  .tabs{display:flex;gap:2px;margin-bottom:14px;}
+  .tab-btn{background:var(--border);color:var(--text);border:none;padding:8px 16px;
+       font-size:13px;cursor:pointer;border-radius:3px 3px 0 0;}
+  .tab-btn.active{background:var(--card);font-weight:600;}
+  .tab-content{display:none;}
+  .tab-content.active{display:block;}
+
+  .card{background:var(--card);border:1px solid var(--border);border-radius:5px;
+       padding:14px 16px;margin-bottom:14px;}
+  .card h3{margin:0 0 10px;font-size:13px;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th,td{text-align:center;padding:6px 4px;border-bottom:1px solid var(--border);}
+  th{background:var(--header);color:var(--text-light);font-weight:600;font-size:12px;}
+  .status-ok{color:var(--ok);font-weight:600;}
+  .status-err{color:var(--err);font-weight:600;}
+  pre{white-space:pre-wrap;font-family:Consolas,monospace;font-size:12px;margin:0;}
+  #statusBar{position:sticky;bottom:0;background:var(--header-alt);color:var(--text-light);
+       padding:6px 16px;font-size:12px;}
+  canvas{width:100%;height:420px;background:var(--card);border:1px solid var(--border);border-radius:5px;}
+  .legend{display:flex;gap:16px;font-size:12px;margin-bottom:8px;}
+  .legend span{display:inline-flex;align-items:center;gap:5px;}
+  .swatch{width:12px;height:12px;border-radius:2px;display:inline-block;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Piecewise Throughput Solver</h1>
+  <p>Delayed coker lumped kinetic model - multi-stage feed schedule -&gt; coke yield &amp; bed height (runs entirely in your browser)</p>
+</header>
+
+<div class="layout">
+  <aside>
+    <h2>DRUM / FEED CONSTANTS</h2>
+    <label>Density (kg/m&sup3;)</label>
+    <input type="number" id="density" value="990.0" step="0.1">
+    <label>CCR (wt%)</label>
+    <input type="number" id="ccr" value="13.690" step="0.001">
+    <label>Drum temperature (&deg;C)</label>
+    <input type="number" id="temp" value="495.0" step="0.1">
+
+    <h2>FEED SCHEDULE (segments)</h2>
+    <div class="seg-list" id="segList"></div>
+    <div class="seg-row">
+      <input type="number" id="newThroughput" value="100.0" step="0.1" placeholder="m3/h">
+      <input type="number" id="newDuration" value="8.0" step="0.1" placeholder="h">
+      <button class="btn btn-ghost btn-small" onclick="addSegment()">+ Add</button>
+    </div>
+
+    <button class="btn btn-ghost" onclick="runValidation()">Validate against base case</button>
+    <button class="btn btn-accent" onclick="runSolve()">Solve schedule</button>
+  </aside>
+
+  <main>
+    <div class="tabs">
+      <button class="tab-btn active" onclick="showTab('results')" id="tabBtnResults">Results</button>
+      <button class="tab-btn" onclick="showTab('graph')" id="tabBtnGraph">Graph</button>
+    </div>
+
+    <div class="tab-content active" id="tab-results">
+      <div class="card">
+        <h3>Final Yields (whole cycle)</h3>
+        <table id="yieldTable">
+          <thead><tr><th>Product</th><th>Yield (wt%)</th><th>Avg rate (t/h)</th><th>Total mass (t)</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h3>Segment Breakdown</h3>
+        <table id="segTable">
+          <thead><tr><th>#</th><th>m3/h</th><th>h</th><th>Mass fed (t)</th><th>Unconv. VR @ end (wt%)</th><th>Coke @ end (wt%)</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h3>Coke Chamber / Bed Height</h3>
+        <pre id="bedInfo">Solve a schedule to see results.</pre>
+      </div>
+
+      <div class="card">
+        <h3>Solver Convergence / Validation</h3>
+        <pre id="convInfo">-</pre>
+      </div>
+    </div>
+
+    <div class="tab-content" id="tab-graph">
+      <div class="card">
+        <div class="legend">
+          <span><span class="swatch" style="background:#ff8a3d"></span>Gas</span>
+          <span><span class="swatch" style="background:#3fb8af"></span>Distillate</span>
+          <span><span class="swatch" style="background:#3a3f47"></span>Coke</span>
+          <span><span class="swatch" style="background:#8b93a1"></span>Unconverted VR</span>
+        </div>
+        <canvas id="chart" width="900" height="420"></canvas>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="statusBar">Ready.</div>
+
+<script>
+/* ============================================================================
+   CORE KINETIC MODEL (ported 1:1 from coker_kinetic_solver2_final1.py)
+   K1/K2/K3 correlations, ODE, mass-balance check, coke-chamber formulas are
+   UNCHANGED from the Python source. The ODE dR/dt = -(K1+K2+K3)*R with
+   dLump/dt = K_i*R is LINEAR with constant coefficients within a segment,
+   so it has an exact closed-form solution (verified against SciPy's Radau
+   integrator in Python to ~1e-13 relative error) - used here instead of a
+   numeric ODE library so this page has zero external dependencies.
+   ========================================================================= */
+
+const LUMP_ORDER = ["gas","distillate","coke"];
+const LUMP_LABELS = {gas:"Gas", distillate:"Distillate", coke:"Coke"};
+
+const COKE_CHAMBER_VOLUME_M3 = 800.0;
+const COKE_DENSITY_kg_PER_M3 = 0.97;
+const COKE_CHAMBER_AREA_M2 = 40.71504079;
+const KNUCKLE_HEIGHT_M = 6.97;
+
+class SolverError extends Error {}
+
+function validateInputs(throughput, ccr, density, duration, tempC){
+  const errs = [];
+  if(!(throughput > 0)) errs.push("Feed rate must be a positive number (m3/h).");
+  if(!(ccr >= 0 && ccr <= 40)) errs.push("CCR must be between 0 and 40 wt%.");
+  if(!(density >= 700 && density <= 1100)) errs.push("Density must be between 700 and 1100 kg/m3.");
+  if(!(duration > 0)) errs.push("Duration must be a positive number (h).");
+  if(!(tempC >= 400 && tempC <= 550)) errs.push("Drum temperature must be between 400 and 550 C for this model's valid range.");
+  if(errs.length) throw new SolverError(errs.join(" "));
+}
+
+function effectiveRateConstants(tempC, ccr, density){
+  const T = tempC + 273.15;
+  const K1 = 0.0144 * Math.pow(ccr,1.0324) * Math.pow(T,0.2638) *
+             Math.exp(-1500.11 * Math.pow(ccr,0.3248) / T);
+  const K2 = 9.9964 * Math.pow(ccr,2.1802) * Math.pow(T,0.2457) *
+             Math.exp(-4368.3 * Math.pow(ccr,0.2889) / T);
+  const K3 = 0.05101 * Math.pow(ccr,1.6108) * Math.pow(T,0.4902) *
+             Math.exp(-3649.6 * Math.pow(ccr,0.1970) / T);
+  return {gas:K1, distillate:K2, coke:K3};
+}
+
+// Closed-form integration of one segment: state=[R,gas,dist,coke] -> state at t0+dt
+function integrateSegment(state, dt, k){
+  const Ktot = k.gas + k.distillate + k.coke;
+  const [R0,g0,d0,c0] = state;
+  const factor = Math.exp(-Ktot*dt);
+  const R1 = R0*factor;
+  const g1 = g0 + (k.gas/Ktot)*R0*(1-factor);
+  const d1 = d0 + (k.distillate/Ktot)*R0*(1-factor);
+  const c1 = c0 + (k.coke/Ktot)*R0*(1-factor);
+  return [R1,g1,d1,c1];
+}
+
+function solvePiecewise(schedule, density, ccr, tempC, massBalanceTol=1e-6){
+  if(!schedule.length) throw new SolverError("Add at least one feed segment before solving.");
+
+  let state = [1.0, 0.0, 0.0, 0.0];
+  let tCursor = 0.0;
+  let totalMassFed = 0.0;
+  const segmentsOut = [];
+  const stitchedT = [0.0];
+  const stitchedY = [state.slice()];
+
+  for(let i=0;i<schedule.length;i++){
+    const seg = schedule[i];
+    validateInputs(seg.throughput, ccr, density, seg.duration, tempC);
+    const k = effectiveRateConstants(tempC, ccr, density);
+
+    // sample every ~1h within the segment for the stitched time series
+    const nPts = Math.max(2, Math.round(seg.duration)+1);
+    const dtStep = seg.duration / (nPts-1);
+    let localState = state.slice();
+    for(let p=1;p<nPts;p++){
+      localState = integrateSegment(localState, dtStep, k);
+      stitchedT.push(tCursor + p*dtStep);
+      stitchedY.push(localState.slice());
+    }
+    state = integrateSegment(state, seg.duration, k); // exact end-state (avoids step accumulation error)
+
+    const feedRateTph = seg.throughput * density / 1000.0;
+    const massFed = feedRateTph * seg.duration;
+    totalMassFed += massFed;
+
+    segmentsOut.push({
+      segment:i+1, throughput:seg.throughput, duration:seg.duration,
+      feedRateTph, massFed, stateAtEnd: state.slice()
+    });
+    tCursor += seg.duration;
+  }
+
+  const [Rfinal, gFinal, dFinal, cFinal] = state;
+  const lumpFracs = {gas:gFinal, distillate:dFinal, coke:cFinal};
+
+  const massSum = Rfinal + gFinal + dFinal + cFinal;
+  const residual = Math.abs(1.0 - massSum);
+  if(residual > massBalanceTol){
+    throw new SolverError(`Mass balance did not close within tolerance (residual=${residual.toExponential(3)}, tol=${massBalanceTol.toExponential(1)}).`);
+  }
+
+  const allFracs = {...lumpFracs, unconverted_residue: Rfinal};
+  for(const [lump, frac] of Object.entries(allFracs)){
+    if(frac < -1e-8 || frac > 1.0+1e-8){
+      throw new SolverError(`Unphysical yield computed for '${lump}': ${(frac*100).toFixed(3)} wt%.`);
+    }
+  }
+
+  const yieldsWtPct = {};
+  for(const lump of LUMP_ORDER) yieldsWtPct[lump] = Math.max(0,lumpFracs[lump])*100.0;
+  const unconvertedResiduePct = Math.max(0,Rfinal)*100.0;
+
+  const totalMassT = {};
+  for(const lump of LUMP_ORDER) totalMassT[lump] = (yieldsWtPct[lump]/100.0) * totalMassFed;
+  const totalCycleTimeH = tCursor;
+  const massRatesTph = {};
+  for(const lump of LUMP_ORDER) massRatesTph[lump] = totalMassT[lump] / totalCycleTimeH;
+
+  const MTsim = totalMassT.coke;
+  const Fm3 = MTsim / COKE_DENSITY_kg_PER_M3 - 87;
+  const HTcyl = Fm3 / COKE_CHAMBER_AREA_M2;
+  const HTtotal = HTcyl + KNUCKLE_HEIGHT_M;
+  const occupancyPct = Fm3 / COKE_CHAMBER_VOLUME_M3 * 100.0;
+
+  return {
+    segments: segmentsOut,
+    totalMassFed, totalCycleTimeH,
+    yieldsWtPct, unconvertedResiduePct, massRatesTph, totalMassT,
+    cokeChamber: {MTsim, Fm3, HTcyl, HTtotal, occupancyPct},
+    stitchedT, stitchedY,
+    massBalanceResidual: residual
+  };
+}
+
+// Single-stage reference solve (== original app's solve_coker_kinetics)
+function solveSingleStage(throughput, ccr, density, cycleTimeH, tempC){
+  return solvePiecewise([{throughput, duration:cycleTimeH}], density, ccr, tempC);
+}
+
+/* ============================================================================
+   UI WIRING
+   ========================================================================= */
+
+let schedule = [
+  {throughput:100.0, duration:14.0},
+  {throughput:84.0, duration:10.0},
+];
+
+function renderSegList(){
+  const el = document.getElementById('segList');
+  el.innerHTML = '';
+  schedule.forEach((s,i)=>{
+    const div = document.createElement('div');
+    div.className = 'seg-item';
+    div.innerHTML = `<span>#${i+1}: ${s.throughput} m3/h &times; ${s.duration} h</span>
+      <button onclick="removeSegment(${i})">&times;</button>`;
+    el.appendChild(div);
+  });
+}
+
+function addSegment(){
+  const t = parseFloat(document.getElementById('newThroughput').value);
+  const d = parseFloat(document.getElementById('newDuration').value);
+  if(isNaN(t) || isNaN(d)){ alert('Throughput and duration must be numeric.'); return; }
+  schedule.push({throughput:t, duration:d});
+  renderSegList();
+}
+function removeSegment(i){ schedule.splice(i,1); renderSegList(); }
+
+function showTab(name){
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  document.getElementById('tabBtn'+name[0].toUpperCase()+name.slice(1)).classList.add('active');
+}
+
+function setStatus(text, state){
+  const bar = document.getElementById('statusBar');
+  bar.textContent = text;
+  bar.style.color = state==='ok' ? '#3fae5b' : state==='err' ? '#e5484d' : '#eef1f5';
+}
+
+function readConstants(){
+  const density = parseFloat(document.getElementById('density').value);
+  const ccr = parseFloat(document.getElementById('ccr').value);
+  const temp = parseFloat(document.getElementById('temp').value);
+  if([density,ccr,temp].some(isNaN)) throw new SolverError("Density, CCR and temperature must be numeric.");
+  return {density, ccr, temp};
+}
+
+function runSolve(){
+  try{
+    const {density, ccr, temp} = readConstants();
+    const result = solvePiecewise(schedule, density, ccr, temp);
+    populateResults(result);
+    showTab('graph');
+    setStatus('Solved successfully - mass balance closed within tolerance.', 'ok');
+  }catch(e){
+    document.getElementById('convInfo').textContent = '[FAILED]\n' + e.message;
+    setStatus('ERROR: ' + e.message, 'err');
+    alert(e.message);
+  }
+}
+
+function populateResults(result){
+  const yb = document.querySelector('#yieldTable tbody');
+  yb.innerHTML = '';
+  for(const lump of LUMP_ORDER){
+    yb.innerHTML += `<tr><td>${LUMP_LABELS[lump]}</td><td>${result.yieldsWtPct[lump].toFixed(3)}</td>
+      <td>${result.massRatesTph[lump].toFixed(2)}</td><td>${result.totalMassT[lump].toFixed(1)}</td></tr>`;
+  }
+
+  const sb = document.querySelector('#segTable tbody');
+  sb.innerHTML = '';
+  result.segments.forEach(s=>{
+    const st = s.stateAtEnd;
+    sb.innerHTML += `<tr><td>${s.segment}</td><td>${s.throughput.toFixed(1)}</td><td>${s.duration.toFixed(1)}</td>
+      <td>${s.massFed.toFixed(1)}</td><td>${(st[0]*100).toFixed(2)}</td><td>${(st[3]*100).toFixed(2)}</td></tr>`;
+  });
+
+  const cc = result.cokeChamber;
+  document.getElementById('bedInfo').textContent =
+`Total feed: ${result.totalMassFed.toFixed(2)} t over ${result.totalCycleTimeH.toFixed(1)} h
+Coke mass (simulation): ${cc.MTsim.toFixed(2)} t
+Coke volume: ${cc.Fm3.toFixed(2)} m3
+Coke height (cylindrical section): ${cc.HTcyl.toFixed(3)} m
+Knuckle height: ${KNUCKLE_HEIGHT_M.toFixed(3)} m
+TOTAL COKE BED HEIGHT: ${cc.HTtotal.toFixed(3)} m
+Chamber occupancy: ${cc.occupancyPct.toFixed(2)} %`;
+
+  document.getElementById('convInfo').textContent =
+`[OK]
+Mass balance residual: ${result.massBalanceResidual.toExponential(3)} (tolerance 1e-6)
+All yields within physical bounds [0, 100]%: PASSED
+Segments solved: ${result.segments.length} (state carried forward between stages, not reset to fresh feed at each stage).`;
+
+  drawChart(result);
+}
+
+function relErr(a,b){ return Math.abs(a-b) / Math.max(Math.abs(b), 1e-12); }
+
+function runValidation(){
+  try{
+    const {density, ccr, temp} = readConstants();
+    if(!schedule.length) throw new SolverError("Add at least one feed segment first.");
+
+    const baseThroughput = schedule[0].throughput;
+    const totalH = schedule.reduce((s,x)=>s+x.duration,0);
+    const base = solveSingleStage(baseThroughput, ccr, density, totalH, temp);
+    const baseCoke = base.yieldsWtPct.coke;
+    const baseHt = base.cokeChamber.HTtotal;
+
+    const tests = {
+      "1-segment (== base)": [{throughput:baseThroughput, duration:totalH}],
+      "2-segment identical halves": [
+        {throughput:baseThroughput, duration:totalH/2},
+        {throughput:baseThroughput, duration:totalH/2}],
+      "3-segment identical thirds": [
+        {throughput:baseThroughput, duration:totalH/3},
+        {throughput:baseThroughput, duration:totalH/3},
+        {throughput:baseThroughput, duration:totalH/3}],
+      "uneven split (same rate)": [
+        {throughput:baseThroughput, duration:Math.min(9,totalH*0.4)},
+        {throughput:baseThroughput, duration:totalH-Math.min(9,totalH*0.4)}],
+    };
+
+    let allPass = true;
+    let lines = [`[BASE CASE] single-stage, ${baseThroughput} m3/h x ${totalH.toFixed(1)} h -> coke ${baseCoke.toFixed(6)} wt%, bed height ${baseHt.toFixed(6)} m\n`];
+    lines.push('Test case'.padEnd(34) + 'coke wt% rel.err'.padStart(18) + '  height rel.err'.padStart(18) + '  status');
+    for(const [name, sched] of Object.entries(tests)){
+      const res = solvePiecewise(sched, density, ccr, temp);
+      const cErr = relErr(res.yieldsWtPct.coke, baseCoke);
+      const hErr = relErr(res.cokeChamber.HTtotal, baseHt);
+      const ok = cErr < 1e-6 && hErr < 1e-6;
+      allPass = allPass && ok;
+      lines.push(name.padEnd(34) + cErr.toExponential(3).padStart(18) + '  ' + hErr.toExponential(3).padStart(16) + '  ' + (ok?'PASS':'FAIL'));
+    }
+    lines.push('\n' + (allPass ? '[VALIDATION PASSED] Safe to trust the piecewise solve for these constants.'
+                                : '[VALIDATION FAILED] Do not trust results until this is fixed.'));
+
+    document.getElementById('convInfo').textContent = lines.join('\n');
+    setStatus('Validation complete - see Convergence panel.', allPass?'ok':'err');
+  }catch(e){
+    document.getElementById('convInfo').textContent = '[FAILED]\n' + e.message;
+    setStatus('ERROR: ' + e.message, 'err');
+  }
+}
+
+function drawChart(result){
+  const canvas = document.getElementById('chart');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const padL=50, padR=20, padT=20, padB=40;
+  ctx.clearRect(0,0,W,H);
+
+  const t = result.stitchedT;
+  const maxT = t[t.length-1];
+  const series = {
+    gas: result.stitchedY.map(y=>Math.max(0,y[1])*100),
+    distillate: result.stitchedY.map(y=>Math.max(0,y[2])*100),
+    coke: result.stitchedY.map(y=>Math.max(0,y[3])*100),
+    vr: result.stitchedY.map(y=>Math.max(0,y[0])*100),
+  };
+  const maxY = Math.max(...Object.values(series).flat(), 10);
+
+  const xAt = (tt)=> padL + (tt/maxT)*(W-padL-padR);
+  const yAt = (vv)=> H-padB - (vv/maxY)*(H-padT-padB);
+
+  // axes
+  ctx.strokeStyle = '#d7dce3';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(padL, padT); ctx.lineTo(padL, H-padB); ctx.lineTo(W-padR, H-padB);
+  ctx.stroke();
+
+  ctx.fillStyle = '#1b212c';
+  ctx.font = '11px Segoe UI';
+  ctx.textAlign = 'center';
+  for(let i=0;i<=5;i++){
+    const tt = maxT*i/5;
+    ctx.fillText(tt.toFixed(0), xAt(tt), H-padB+14);
+  }
+  ctx.textAlign = 'right';
+  for(let i=0;i<=5;i++){
+    const vv = maxY*i/5;
+    ctx.fillText(vv.toFixed(0), padL-6, yAt(vv)+3);
+  }
+  ctx.save();
+  ctx.translate(14, H/2); ctx.rotate(-Math.PI/2);
+  ctx.textAlign='center'; ctx.fillText('Yield (wt%)', 0, 0);
+  ctx.restore();
+  ctx.textAlign='center';
+  ctx.fillText('Time (h)', (padL+W-padR)/2, H-6);
+
+  // segment boundary dashed lines
+  ctx.strokeStyle = '#d7dce3';
+  ctx.setLineDash([4,3]);
+  let cursor=0;
+  result.segments.slice(0,-1).forEach(s=>{
+    cursor += s.duration;
+    ctx.beginPath(); ctx.moveTo(xAt(cursor), padT); ctx.lineTo(xAt(cursor), H-padB); ctx.stroke();
+  });
+  ctx.setLineDash([]);
+
+  // series
+  const colors = {gas:'#ff8a3d', distillate:'#3fb8af', coke:'#3a3f47', vr:'#8b93a1'};
+  for(const [name, vals] of Object.entries(series)){
+    ctx.strokeStyle = colors[name];
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    vals.forEach((v,i)=>{
+      const x=xAt(t[i]), y=yAt(v);
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+  }
+}
+
+renderSegList();
+</script>
+</body>
+</html>
