@@ -6,158 +6,335 @@
 <title>Delayed Coker Kinetic Solver - Piecewise Throughput</title>
 <style>
   :root{
-    --bg:#eef1f5; --card:#ffffff; --border:#d7dce3;
-    --header:#1b212c; --header-alt:#252c39;
-    --accent:#ff8a3d; --accent-dark:#e06f22;
-    --teal:#3fb8af; --steel:#8b93a1; --coke:#3a3f47;
-    --text:#1b212c; --text-light:#eef1f5; --text-muted:#9aa3b2;
-    --ok:#3fae5b; --err:#e5484d;
+    --bg:#12171c;
+    --panel:#1a2129;
+    --panel-2:#1f2830;
+    --border:#2b343d;
+    --text:#dde3e8;
+    --muted:#8b98a3;
+    --gas:#5b9bd5;
+    --dist:#4fb3a3;
+    --coke:#d9820c;
+    --residue:#6b7785;
+    --ok:#4fb3a3;
+    --err:#d9584c;
+    --mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+    --sans: 'IBM Plex Sans', -apple-system, 'Segoe UI', Arial, sans-serif;
   }
   *{box-sizing:border-box;}
-  body{margin:0;background:var(--bg);color:var(--text);
-       font-family:"Segoe UI",Roboto,Arial,sans-serif;}
-  header{background:var(--header);padding:18px 24px;}
-  header h1{margin:0;font-size:20px;color:var(--text-light);}
-  header p{margin:4px 0 0;font-size:12px;color:var(--text-muted);}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--sans);}
+  body{padding:0 0 60px 0;}
 
-  .layout{display:flex;min-height:calc(100vh - 66px);}
-  aside{background:var(--header);width:340px;flex-shrink:0;padding:18px;color:var(--text-light);}
-  aside h2{font-size:12px;letter-spacing:.04em;color:var(--accent);margin:18px 0 8px;}
-  aside h2:first-of-type{margin-top:0;}
-  aside label{display:block;font-size:12px;margin:8px 0 3px;color:var(--text-light);}
-  aside input[type=number]{width:100%;padding:6px 8px;border:1px solid var(--border);
-       border-radius:3px;background:var(--card);color:var(--text);font-size:13px;}
-  .seg-row{display:flex;gap:6px;margin-bottom:6px;align-items:center;}
-  .seg-row input{width:70px;padding:5px 6px;border:1px solid var(--border);border-radius:3px;
-       background:var(--card);color:var(--text);font-size:12px;}
-  .seg-list{margin-bottom:8px;}
-  .seg-item{display:flex;justify-content:space-between;align-items:center;
-       background:var(--header-alt);padding:6px 8px;border-radius:3px;margin-bottom:4px;font-size:12px;}
-  .seg-item button{background:none;border:none;color:var(--err);cursor:pointer;font-size:13px;}
-  .btn{border:none;border-radius:3px;padding:10px 14px;font-size:13px;font-weight:600;
-       cursor:pointer;width:100%;margin-top:6px;}
-  .btn-accent{background:var(--accent);color:#1b212c;}
-  .btn-accent:hover{background:var(--accent-dark);}
-  .btn-ghost{background:var(--header-alt);color:var(--text-light);}
-  .btn-ghost:hover{background:#323b4a;}
-  .btn-small{width:auto;padding:6px 10px;font-size:12px;}
+  header{
+    border-bottom:1px solid var(--border);
+    padding:28px 24px 22px;
+    background:linear-gradient(180deg, #151b21, #12171c);
+  }
+  .header-inner{max-width:1180px;margin:0 auto;}
+  .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.04em;color:var(--coke);margin:0 0 8px;}
+  h1{font-size:26px;font-weight:600;margin:0 0 6px;letter-spacing:-.01em;}
+  .subtitle{color:var(--muted);font-size:14.5px;max-width:680px;line-height:1.55;margin:0;}
+  .reaction{
+    font-family:var(--mono);font-size:13px;color:var(--muted);
+    margin-top:16px;display:flex;gap:22px;flex-wrap:wrap;
+  }
+  .reaction span b{color:var(--text);font-weight:500;}
+  .reaction .g{color:var(--gas);} .reaction .d{color:var(--dist);} .reaction .c{color:var(--coke);}
 
-  main{flex:1;padding:20px;overflow:auto;}
-  .tabs{display:flex;gap:2px;margin-bottom:14px;}
-  .tab-btn{background:var(--border);color:var(--text);border:none;padding:8px 16px;
-       font-size:13px;cursor:pointer;border-radius:3px 3px 0 0;}
-  .tab-btn.active{background:var(--card);font-weight:600;}
+  main{max-width:1180px;margin:0 auto;padding:26px 24px 0;display:grid;grid-template-columns:340px 1fr;gap:20px;}
+  @media (max-width:880px){ main{grid-template-columns:1fr;} }
+
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:20px;}
+  .panel + .panel{margin-top:20px;}
+  .panel h2{font-size:12px;letter-spacing:.02em;color:var(--muted);font-weight:600;margin:0 0 16px;font-family:var(--mono);}
+
+  .field{margin-bottom:16px;}
+  .field label{display:flex;justify-content:space-between;font-size:13px;color:var(--text);margin-bottom:6px;}
+  .field label .unit{color:var(--muted);font-family:var(--mono);font-size:12px;}
+  .field input{
+    width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px;
+    color:var(--text);font-family:var(--mono);font-size:14px;padding:9px 10px;
+  }
+  .field input:focus{outline:none;border-color:var(--gas);}
+  .field .range{font-size:11px;color:var(--muted);margin-top:4px;font-family:var(--mono);}
+
+  /* ---- Feed schedule (segment) editor ---- */
+  .seg-list{margin-bottom:10px;}
+  .seg-item{
+    display:flex;justify-content:space-between;align-items:center;
+    background:var(--panel-2);border:1px solid var(--border);border-radius:4px;
+    padding:8px 10px;margin-bottom:6px;font-family:var(--mono);font-size:12.5px;
+  }
+  .seg-item button{
+    background:none;border:none;color:var(--err);cursor:pointer;font-size:14px;
+    font-family:var(--sans);line-height:1;padding:2px 4px;
+  }
+  .seg-row{display:flex;gap:6px;margin-bottom:4px;}
+  .seg-row input{
+    width:0;flex:1;background:var(--bg);border:1px solid var(--border);border-radius:4px;
+    color:var(--text);font-family:var(--mono);font-size:13px;padding:8px 8px;
+  }
+  .seg-row input:focus{outline:none;border-color:var(--gas);}
+
+  .btn-row{display:flex;gap:10px;margin-top:16px;}
+  button{
+    font-family:var(--sans);font-size:14px;font-weight:600;border-radius:4px;
+    border:1px solid transparent;padding:11px 16px;cursor:pointer;
+  }
+  .btn-solve{background:var(--coke);color:#1a1206;flex:1;}
+  .btn-solve:hover{background:#c67609;}
+  .btn-validate{background:transparent;border-color:var(--border);color:var(--muted);flex:1;}
+  .btn-validate:hover{color:var(--text);border-color:var(--muted);}
+  .btn-add{
+    background:transparent;border:1px solid var(--border);color:var(--muted);
+    font-size:12.5px;font-weight:600;padding:8px 12px;white-space:nowrap;
+  }
+  .btn-add:hover{color:var(--text);border-color:var(--gas);}
+
+  .status{margin-top:14px;font-size:12.5px;font-family:var(--mono);padding:9px 10px;border-radius:4px;display:none;}
+  .status.ok{display:block;background:rgba(79,179,163,.1);color:var(--ok);border:1px solid rgba(79,179,163,.3);}
+  .status.err{display:block;background:rgba(217,88,76,.1);color:var(--err);border:1px solid rgba(217,88,76,.3);}
+  .status.idle{display:block;background:rgba(139,152,163,.08);color:var(--muted);border:1px solid var(--border);}
+
+  /* ---- Tabs (Results / Graph / Theory) ---- */
+  .tabs{display:flex;gap:2px;margin-bottom:16px;font-family:var(--mono);}
+  .tab-btn{
+    background:transparent;border:1px solid var(--border);border-bottom:none;color:var(--muted);
+    font-family:var(--mono);font-size:12px;letter-spacing:.02em;font-weight:600;
+    padding:9px 16px;cursor:pointer;border-radius:5px 5px 0 0;
+  }
+  .tab-btn.active{background:var(--panel);color:var(--coke);border-color:var(--border);}
   .tab-content{display:none;}
   .tab-content.active{display:block;}
 
-  .card{background:var(--card);border:1px solid var(--border);border-radius:5px;
-       padding:14px 16px;margin-bottom:14px;}
-  .card h3{margin:0 0 10px;font-size:13px;}
-  table{width:100%;border-collapse:collapse;font-size:13px;}
-  th,td{text-align:center;padding:6px 4px;border-bottom:1px solid var(--border);}
-  th{background:var(--header);color:var(--text-light);font-weight:600;font-size:12px;}
-  .status-ok{color:var(--ok);font-weight:600;}
-  .status-err{color:var(--err);font-weight:600;}
-  pre{white-space:pre-wrap;font-family:Consolas,monospace;font-size:12px;margin:0;}
-  #statusBar{position:sticky;bottom:0;background:var(--header-alt);color:var(--text-light);
-       padding:6px 16px;font-size:12px;}
-  .chart-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);
-       border-radius:5px;background:var(--card);touch-action:pan-x pan-y;}
-  canvas{display:block;height:420px;}
-  .legend{display:flex;flex-wrap:wrap;gap:16px;font-size:12px;margin-bottom:8px;}
-  .legend span{display:inline-flex;align-items:center;gap:5px;}
-  .swatch{width:12px;height:3px;border-radius:2px;display:inline-block;}
-  .chart-toolbar{display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;}
-  .zoom-btn{border:1px solid var(--border);background:var(--card);color:var(--text);
-       border-radius:3px;padding:6px 12px;font-size:14px;cursor:pointer;font-weight:600;
-       min-width:40px;}
-  .zoom-btn:hover{background:var(--bg);}
-  .zoom-hint{font-size:11px;color:var(--text-muted);margin-left:auto;}
+  /* ---- Yield cards ---- */
+  .results-heading{font-family:var(--mono);font-size:12px;letter-spacing:.06em;color:var(--muted);font-weight:600;margin:0 0 16px;}
+  .results-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;}
+  .results-grid.row2{grid-template-columns:repeat(4,1fr);margin-top:16px;}
+  @media (max-width:880px){ .results-grid{grid-template-columns:repeat(2,1fr);} }
+  @media (max-width:420px){ .results-grid{grid-template-columns:1fr;} }
+  .yield-card{background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:20px 20px 18px;}
+  .yield-card .lbl{font-size:13px;color:var(--muted);margin-bottom:12px;}
+  .yield-card .val{font-family:var(--mono);font-size:34px;font-weight:700;line-height:1;letter-spacing:-.01em;}
+  .yield-card .sub{font-family:var(--mono);font-size:12.5px;color:var(--muted);margin-top:12px;line-height:1.5;}
+  .yield-card.gas .val{color:var(--gas);}
+  .yield-card.dist .val{color:var(--dist);}
+  .yield-card.coke .val{color:var(--coke);}
+  .yield-card.residue .val{color:var(--residue);}
+  .yield-card.height .val{color:var(--coke);}
+  .results-footer{
+    display:flex;flex-wrap:wrap;gap:26px;margin-top:20px;padding-top:16px;
+    border-top:1px solid var(--border);font-family:var(--mono);font-size:13px;color:var(--muted);
+  }
+  .results-footer b{color:var(--text);font-weight:600;}
 
-  /* ---- Mobile / narrow screens ---- */
+  /* ---- Tables (segment breakdown) ---- */
+  table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12.5px;}
+  th{text-align:right;color:var(--muted);font-weight:500;padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;}
+  th:first-child, td:first-child{text-align:left;}
+  td{text-align:right;padding:7px 10px;border-bottom:1px solid rgba(255,255,255,.03);}
+  .table-wrap{max-height:280px;overflow-y:auto;overflow-x:auto;}
+  .table-wrap::-webkit-scrollbar{width:8px;height:8px;} .table-wrap::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
+
+  /* ---- Coke chamber grid ---- */
+  .chamber-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;font-family:var(--mono);font-size:13px;}
+  @media (max-width:520px){ .chamber-grid{grid-template-columns:1fr;} }
+  .chamber-grid div{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04);}
+  .chamber-grid .k{color:var(--muted);}
+  .chamber-grid .v{color:var(--text);}
+  .chamber-grid .highlight .v{color:var(--coke);font-weight:600;}
+
+  /* ---- Convergence ---- */
+  .convergence{font-family:var(--mono);font-size:12.5px;line-height:1.9;color:var(--muted);white-space:pre-wrap;}
+  .tag{display:inline-block;padding:1px 7px;border-radius:3px;font-size:11px;margin-right:8px;}
+  .tag.pass{background:rgba(79,179,163,.15);color:var(--ok);}
+  .tag.fail{background:rgba(217,88,76,.15);color:var(--err);}
+
+  /* ---- Graph ---- */
+  .legend{display:flex;flex-wrap:wrap;gap:16px;font-size:11.5px;font-family:var(--mono);margin-bottom:10px;color:var(--muted);}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .swatch{width:12px;height:3px;border-radius:2px;display:inline-block;}
+  .chart-toolbar{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;}
+  .zoom-btn{
+    border:1px solid var(--border);background:var(--panel-2);color:var(--text);
+    border-radius:4px;padding:6px 12px;font-size:14px;cursor:pointer;font-weight:600;
+    min-width:40px;font-family:var(--mono);
+  }
+  .zoom-btn:hover{border-color:var(--gas);}
+  .zoom-hint{font-size:11px;color:var(--muted);font-family:var(--mono);margin-left:auto;}
+  .chart-wrap{
+    overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);
+    border-radius:5px;background:var(--panel-2);touch-action:pan-x pan-y;
+  }
+  canvas{display:block;height:420px;}
+
+  /* ---- Theory tab ---- */
+  .theory h4{font-size:13.5px;margin:20px 0 8px;color:var(--text);border-left:3px solid var(--coke);padding-left:10px;font-family:var(--mono);letter-spacing:.01em;}
+  .theory h4:first-child{margin-top:0;}
+  .theory p{font-size:13.5px;line-height:1.65;margin:8px 0;color:var(--text);}
+  .theory ul,.theory ol{font-size:13.5px;line-height:1.65;margin:8px 0;padding-left:22px;color:var(--text);}
+  .theory li{margin:4px 0;}
+  .theory b{color:var(--coke);font-weight:600;}
+  .eq{
+    background:var(--panel-2);border:1px solid var(--border);border-radius:4px;
+    padding:10px 14px;font-family:var(--mono);font-size:12.5px;margin:10px 0;
+    overflow-x:auto;white-space:pre;color:var(--text);
+  }
+  .theory table{margin:8px 0;}
+  .theory th,.theory td{text-align:left;font-size:12.5px;color:var(--text);}
+  .theory th{color:var(--muted);}
+  .note{
+    background:rgba(217,130,12,.08);border:1px solid rgba(217,130,12,.3);border-radius:4px;
+    padding:10px 12px;font-size:12.5px;margin:12px 0;color:var(--muted);font-family:var(--mono);
+  }
+
+  footer{max-width:1180px;margin:40px auto 0;padding:20px 24px;color:var(--muted);font-size:12px;border-top:1px solid var(--border);font-family:var(--mono);}
+
+  /* ---- Mobile ---- */
   @media (max-width: 820px){
-    .layout{flex-direction:column;}
-    aside{width:100%;padding:14px;}
-    main{padding:14px;}
-    .seg-row input{width:auto;flex:1;min-width:0;}
-    header{padding:14px 16px;}
-    header h1{font-size:17px;}
-    th,td{padding:5px 3px;font-size:11px;}
+    header{padding:18px 16px;}
+    h1{font-size:20px;}
+    main{padding:16px 14px 0;}
+    .panel{padding:16px;}
     canvas{height:320px;}
     .zoom-hint{margin-left:0;width:100%;order:99;}
+    th,td{padding:5px 6px;font-size:11px;}
   }
 </style>
 </head>
 <body>
 
 <header>
-  <h1>Coker - Coke Bed height and yield Solver</h1>
-  <p>Delayed coker lumped kinetic model - multi-stage feed  -&gt; coke yield &amp; bed height </p>
+  <div class="header-inner">
+    <p class="kicker">DELAYED COKING &mdash; LUMPED KINETIC MODEL &middot; Yield calculation</p>
+    <h1>Delayed Coker Solver</h1>
+    <p class="subtitle">Multi-stage feed schedule &rarr; coke yield &amp; bed height.</p>
+    <div class="reaction">
+      <span>VR &rarr; <b class="g">K&#8321; Gas</b></span>
+      <span>VR &rarr; <b class="d">K&#8322; Distillate</b></span>
+      <span>VR &rarr; <b class="c">K&#8323; Coke</b></span>
+    </div>
+  </div>
 </header>
 
-<div class="layout">
-  <aside>
-    <h2>DRUM / FEED CONSTANTS</h2>
-    <label>Density (kg/m&sup3;)</label>
-    <input type="number" id="density" value="990.0" step="0.1">
-    <label>CCR (wt%)</label>
-    <input type="number" id="ccr" value="13.690" step="0.001">
-    <label>Drum temperature (&deg;C)</label>
-    <input type="number" id="temp" value="482.0" step="0.1">
-
-    <h2>FEED SCHEDULE (segments)</h2>
-    <div class="seg-list" id="segList"></div>
-    <div class="seg-row">
-      <input type="number" id="newThroughput" value="100.0" step="0.1" placeholder="m3/h">
-      <input type="number" id="newDuration" value="8.0" step="0.1" placeholder="h">
-      <button class="btn btn-ghost btn-small" onclick="addSegment()">+ Add</button>
+<main>
+  <!-- LEFT: INPUTS -->
+  <div>
+    <div class="panel">
+      <h2>DRUM / FEED CONSTANTS</h2>
+      <div class="field">
+        <label>Density <span class="unit">kg/m&sup3;</span></label>
+        <input type="number" id="density" value="990.0" step="any">
+        <div class="range">valid range: 700&ndash;1100</div>
+      </div>
+      <div class="field">
+        <label>CCR <span class="unit">wt%</span></label>
+        <input type="number" id="ccr" value="13.690" step="any">
+        <div class="range">valid range: 0&ndash;40</div>
+      </div>
+      <div class="field">
+        <label>Drum temperature <span class="unit">&deg;C</span></label>
+        <input type="number" id="temp" value="482.0" step="any">
+        <div class="range">valid range: 400&ndash;550</div>
+      </div>
     </div>
 
-    <button class="btn btn-ghost" onclick="runValidation()">Validate against base case</button>
-    <button class="btn btn-accent" onclick="runSolve()">Solve schedule</button>
-  </aside>
+    <div class="panel">
+      <h2>FEED SCHEDULE (SEGMENTS)</h2>
+      <p style="font-family:var(--mono);font-size:11.5px;color:var(--muted);line-height:1.6;margin:0 0 12px;">
+        Add each stage: throughput (m&sup3;/h) and duration (h). Solved in order &mdash; reacted-fraction state carried forward between stages, never reset.
+      </p>
+      <div class="seg-list" id="segList"></div>
+      <div class="seg-row">
+        <input type="number" id="newThroughput" value="100.0" step="any" placeholder="m3/h">
+        <input type="number" id="newDuration" value="8.0" step="any" placeholder="h">
+        <button class="btn-add" onclick="addSegment()">+ Add</button>
+      </div>
 
-  <main>
+      <div class="btn-row">
+        <button class="btn-validate" onclick="runValidation()">Validate</button>
+        <button class="btn-solve" onclick="runSolve()">Solve</button>
+      </div>
+
+      <div class="status idle" id="statusBar">Ready.</div>
+    </div>
+  </div>
+
+  <!-- RIGHT: RESULTS -->
+  <div>
     <div class="tabs">
-      <button class="tab-btn active" onclick="showTab('results')" id="tabBtnResults">Results</button>
-      <button class="tab-btn" onclick="showTab('graph')" id="tabBtnGraph">Graph</button>
+      <button class="tab-btn active" onclick="showTab('results')" id="tabBtnResults">RESULTS</button>
+      <button class="tab-btn" onclick="showTab('graph')" id="tabBtnGraph">GRAPH</button>
+      <button class="tab-btn" onclick="showTab('theory')" id="tabBtnTheory">THEORY</button>
     </div>
 
     <div class="tab-content active" id="tab-results">
-      <div class="card">
-        <h3>Final Yields (whole cycle)</h3>
-        <table id="yieldTable">
-          <thead><tr><th>Product</th><th>Yield (wt%)</th><th>Avg rate (t/h)</th><th>Total mass (t)</th></tr></thead>
-          <tbody></tbody>
-        </table>
+      <div class="panel">
+        <h2>FINAL YIELDS</h2>
+        <div class="results-grid" id="yieldCards">
+          <div class="yield-card gas">
+            <div class="lbl">Gas</div>
+            <div class="val" id="cardGasPct">–</div>
+            <div class="sub" id="cardGasSub">–</div>
+          </div>
+          <div class="yield-card dist">
+            <div class="lbl">Distillate</div>
+            <div class="val" id="cardDistPct">–</div>
+            <div class="sub" id="cardDistSub">–</div>
+          </div>
+          <div class="yield-card coke">
+            <div class="lbl">Coke</div>
+            <div class="val" id="cardCokePct">–</div>
+            <div class="sub" id="cardCokeSub">–</div>
+          </div>
+          <div class="yield-card residue">
+            <div class="lbl">Unconverted VR</div>
+            <div class="val" id="cardResiduePct">–</div>
+            <div class="sub" id="cardResidueSub">at end of cycle</div>
+          </div>
+        </div>
+        <div class="results-grid row2" id="heightCardRow">
+          <div class="yield-card height">
+            <div class="lbl">Predicted Coke Height</div>
+            <div class="val" id="cardHeight">–</div>
+            <div class="sub" id="cardHeightSub">–</div>
+          </div>
+        </div>
+        <div class="results-footer">
+          <span>Feed API gravity: <b id="footApi">–</b></span>
+          <span>Cycle duration: <b id="footDuration">–</b></span>
+          <span>Time points: <b id="footPoints">–</b></span>
+        </div>
       </div>
 
-      <div class="card">
-        <h3>Segment Breakdown</h3>
-        <table id="segTable">
-          <thead><tr><th>#</th><th>m3/h</th><th>h</th><th>Mass fed (t)</th><th>Unconv. VR @ end (wt%)</th><th>Coke @ end (wt%)</th></tr></thead>
-          <tbody></tbody>
-        </table>
+      <div class="panel">
+        <h2>SEGMENT BREAKDOWN</h2>
+        <div class="table-wrap">
+          <table id="segTable">
+            <thead><tr><th>#</th><th>m3/h</th><th>h</th><th>Mass fed (t)</th><th>Unconv. VR @ end (wt%)</th><th>Coke @ end (wt%)</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </div>
 
-      <div class="card">
-        <h3>Coke Chamber / Bed Height</h3>
-        <pre id="bedInfo">Solve a schedule to see results.</pre>
+      <div class="panel">
+        <h2>COKE CHAMBER / BED HEIGHT</h2>
+        <pre class="convergence" id="bedInfo">Solve a schedule to see results.</pre>
       </div>
 
-      <div class="card">
-        <h3>Solver Convergence / Validation</h3>
-        <pre id="convInfo">-</pre>
+      <div class="panel">
+        <h2>SOLVER CONVERGENCE / VALIDATION</h2>
+        <pre class="convergence" id="convInfo">-</pre>
       </div>
     </div>
 
     <div class="tab-content" id="tab-graph">
-      <div class="card">
+      <div class="panel">
         <div class="legend">
-          <span><span class="swatch" style="background:#ff8a3d"></span>Gas</span>
-          <span><span class="swatch" style="background:#3fb8af"></span>Distillate</span>
-          <span><span class="swatch" style="background:#3a3f47"></span>Coke</span>
-          <span><span class="swatch" style="background:#8b93a1"></span>Unconverted VR</span>
+          <span><span class="swatch" style="background:#5b9bd5"></span>Gas</span>
+          <span><span class="swatch" style="background:#4fb3a3"></span>Distillate</span>
+          <span><span class="swatch" style="background:#d9820c"></span>Coke</span>
+          <span><span class="swatch" style="background:#6b7785"></span>Unconverted VR</span>
         </div>
         <div class="chart-toolbar">
           <button class="zoom-btn" onclick="zoomChart(-1)" title="Zoom out">&minus;</button>
@@ -170,10 +347,166 @@
         </div>
       </div>
     </div>
-  </main>
-</div>
 
-<div id="statusBar">Ready.</div>
+    <div class="tab-content" id="tab-theory">
+      <div class="panel theory">
+        <h4>What is delayed coking?</h4>
+        <p>Delayed coking is a thermal-cracking (no catalyst) refinery process that upgrades the
+        heaviest, lowest-value fraction of the crude barrel - vacuum residue (VR), the bottom
+        product of the vacuum distillation column - into more valuable, lighter products. VR is
+        heated in a furnace to a high temperature and routed into a large insulated vessel called
+        a coke drum, where it is held (not actively heated further) for many hours. Held at
+        reaction temperature with nowhere to go, the VR molecules crack: some break into small,
+        volatile fragments that leave the drum as vapor, and the rest polymerize/condense into a
+        solid, carbon-rich residue - petroleum coke - that builds up in the drum as a bed.</p>
+        <p>The process runs as a semi-batch cycle on a pair (or set) of drums: one drum fills with
+        hot feed while the other, already full, is steamed, cooled, opened, and mechanically
+        decoked (the coke bed is cut out with high-pressure water) before being sealed up and
+        switched back into service. The period a single drum spends filling is usually called the
+        "cycle time" or "fill time" in this tool.</p>
+
+        <h4>What comes out of the drum</h4>
+        <p>The hydrocarbon vapor leaving the top of the drum is fractionated downstream into gas,
+        naphtha, and various gas-oil cuts. For the purposes of this tool those are grouped into
+        two lumps:</p>
+        <ul>
+          <li><b>Gas</b> - light cracked gas (C1-C4 and similar very light material).</li>
+          <li><b>Distillate</b> - the combined liquid product cuts (naphtha through gas oils).</li>
+        </ul>
+        <p>The solid left behind in the drum is <b>coke</b>. Everything that hasn't yet reacted at
+        a given point in time is tracked as unconverted vacuum residue (VR).</p>
+
+        <h4>Why a "lumped kinetic model"</h4>
+        <p>The real cracking chemistry inside a coke drum involves an enormous number of individual
+        reactions across thousands of distinct molecules. A first-principles model of every
+        molecule is neither practical nor necessary for predicting overall drum yields. Instead,
+        this model uses a standard refinery-engineering simplification called <b>lumping</b>:
+        every product molecule is grouped ("lumped") into one of a small number of pseudo-species
+        - here, VR, Gas, Distillate and Coke - and the conversion of VR into each lump is described
+        by a single empirical rate constant per lump, fitted so the lumped model reproduces observed
+        plant/lab yield behavior.</p>
+
+        <h4>The reaction network</h4>
+        <p>VR is assumed to crack via three independent, parallel first-order pathways running
+        simultaneously from the same pool of unconverted VR:</p>
+        <div class="eq">VR --K1--&gt; Gas
+VR --K2--&gt; Distillate
+VR --K3--&gt; Coke</div>
+        <p>Each pathway is first-order in the remaining VR concentration, giving the governing
+        differential equations:</p>
+        <div class="eq">d[VR]/dt         = -(K1 + K2 + K3) * [VR]
+d[Gas]/dt        =  K1 * [VR]
+d[Distillate]/dt =  K2 * [VR]
+d[Coke]/dt       =  K3 * [VR]</div>
+        <p>[VR] starts at 1.0 (100% of the feed charged is unconverted at the instant it enters the
+        drum) and the three product lumps start at 0. Because the three product equations only add
+        material and never remove it, and the VR equation only ever loses exactly what the three
+        gain, total mass is conserved automatically by construction: [VR] + Gas + Distillate + Coke
+        = 1.0 at every instant. This tool checks that identity after every solve (to within
+        1&times;10<sup>-6</sup>) as a built-in integrity check on the numerics, not the chemistry.</p>
+
+        <h4>Where K1, K2, K3 come from</h4>
+        <p>K1, K2 and K3 are not universal physical constants - they are empirical correlations,
+        calibrated for this specific model, expressed as functions of two feed/operating
+        properties:</p>
+        <ul>
+          <li><b>CCR (Conradson Carbon Residue, wt%)</b> - a standard lab test that measures how
+          much carbonaceous residue a feed leaves behind when heated in the absence of air. It is
+          the single strongest indicator of how coke-prone a given VR is: high-CCR feeds make more
+          coke and less liquid, all else equal.</li>
+          <li><b>Drum temperature (&deg;C, converted to Kelvin for the correlation)</b> - thermal
+          cracking rates are strongly temperature-dependent (loosely Arrhenius-like: rate rises
+          roughly exponentially with temperature), so drum operating temperature has a large effect
+          on how far the reaction has progressed by a given point in the cycle.</li>
+        </ul>
+        <p>Each K is of the general form <code>A &middot; CCR^m &middot; T^n &middot; exp(-B &middot;
+        CCR^p / T)</code> - a power-law/CCR term combined with an Arrhenius-style exponential
+        temperature term. The specific constants (A, m, n, B, p) differ between K1, K2 and K3
+        because gas formation, liquid formation and coke formation respond differently to feed
+        quality and temperature. Feed density is used only to report the feed's API gravity
+        alongside the results - it does not enter the rate correlations.</p>
+
+        <h4>From reacted fractions to physical results</h4>
+        <p>The ODE above gives dimensionless <i>fractions</i> of the original VR charge that have
+        become each product by a given time - not yet tons or metres. To get physical results:</p>
+        <ol>
+          <li><b>Mass fed:</b> feed rate (m&sup3;/h) &times; density (kg/m&sup3;) &divide; 1000 gives
+          feed rate in t/h; multiplied by however many hours that rate was actually fed, and summed
+          across the whole schedule, gives total tons of VR charged to the drum.</li>
+          <li><b>Product tonnage:</b> the model's final reacted fractions (once the whole fill time
+          has elapsed) are applied to that total mass fed to get tons of gas, distillate and coke
+          actually produced over the cycle.</li>
+          <li><b>Coke bed height:</b> coke tonnage is converted to a coke volume using a coke bulk
+          density, a fixed volume allowance is subtracted for the drum's bottom knuckle region, and
+          the remaining volume is divided by the drum's cylindrical cross-sectional area to get a
+          height - to which the knuckle section's own height is then added back on for the total
+          bed height.</li>
+        </ol>
+
+        <h4>Why throughput alone doesn't change the % yields</h4>
+        <p>A common intuition is that "feeding faster/slower" should itself change how much coke
+        forms. In <i>this</i> model it doesn't, because K1/K2/K3 depend only on CCR and
+        temperature - not on feed rate. Feed rate only scales how much total VR mass passed
+        through the drum; it does not change the chemistry each parcel of that VR experiences.
+        So with CCR and temperature held constant, a throughput schedule changes the <i>total tons</i>
+        of coke made (and therefore the bed height), but not the <i>wt% yield</i> of coke on feed.
+        If you want throughput itself to move the % yields, that would require your CCR or
+        temperature to also change alongside throughput (which this tool supports per segment) -
+        it isn't something feed rate does on its own in a first-order lumped model like this one.</p>
+
+        <h4>Why the piecewise (multi-stage) solve matters</h4>
+        <p>A real drum fill is rarely run at one constant rate for the whole cycle. This tool lets
+        you break the fill into any number of stages, each with its own throughput (and optionally
+        its own CCR/temperature). Instead of resetting the reacting mixture back to 100% fresh,
+        unconverted VR at the start of every stage, the model carries the reacted-fraction state
+        (VR/Gas/Distillate/Coke) forward from the end of one stage as the starting point of the
+        next - because physically, the material already sitting in the drum doesn't "un-react" just
+        because the feed valve setting changed. When CCR and temperature stay constant across
+        stages, this stage-wise solve is mathematically identical to one continuous solve over the
+        combined time (verified in the Validate panel to floating-point precision); it becomes
+        essential the moment temperature or CCR is allowed to change mid-cycle.</p>
+
+        <h4>Model assumptions &amp; limitations</h4>
+        <ul>
+          <li>Lumped, first-order, parallel-reaction kinetics - a simplification of real cracking
+          chemistry, not a molecular-level simulation.</li>
+          <li>K1/K2/K3 are functions of CCR and temperature only; other feed properties (e.g.
+          aromaticity, asphaltene content, sulfur) are not explicit inputs, though CCR correlates
+          with several of them in practice.</li>
+          <li>Assumes uniform temperature and composition at any instant (well-mixed reacting
+          fraction), not a spatial/plug-flow profile up the height of the drum.</li>
+          <li>Coke bulk density and the drum's geometric constants (chamber area, volume, knuckle
+          height) are fixed inputs to the height calculation, not solved for.</li>
+          <li>Valid input ranges enforced by the solver: CCR 0-40 wt%, density 700-1100 kg/m&sup3;,
+          drum temperature 400-550&deg;C. Results outside a feed/operating envelope similar to what
+          the correlations were calibrated against should be treated with appropriate caution.</li>
+        </ul>
+
+        <h4>Nomenclature</h4>
+        <table>
+          <tr><th>Symbol</th><th>Meaning</th></tr>
+          <tr><td>VR</td><td>Vacuum residue - unconverted feed fraction remaining</td></tr>
+          <tr><td>K1, K2, K3</td><td>Rate constants for VR&rarr;Gas, VR&rarr;Distillate, VR&rarr;Coke (per hour)</td></tr>
+          <tr><td>CCR</td><td>Conradson Carbon Residue of the feed, wt%</td></tr>
+          <tr><td>T</td><td>Drum temperature, K (&deg;C + 273.15) in the rate correlations</td></tr>
+          <tr><td>Cycle time / fill time</td><td>Total hours a drum spends receiving feed before switchover</td></tr>
+          <tr><td>Segment / stage</td><td>A sub-period of the cycle with its own throughput (and optionally CCR/temperature)</td></tr>
+        </table>
+
+        <div class="note">This page is provided as a general engineering/educational reference on
+        the delayed coking process and the lumped kinetic model implemented here. It is not a
+        substitute for site-specific process data, licensor design basis documents, or your unit's
+        own operating envelope and safety procedures.</div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Lumped 3-pathway kinetic model (K1/K2/K3 correlated to CCR and absolute temperature), integrated
+  in closed form per segment, state carried forward across a multi-stage feed schedule. All
+  computation happens locally in this browser tab.
+</footer>
 
 <script>
 /* ============================================================================
@@ -354,7 +687,7 @@ function showTab(name){
 function setStatus(text, state){
   const bar = document.getElementById('statusBar');
   bar.textContent = text;
-  bar.style.color = state==='ok' ? '#3fae5b' : state==='err' ? '#e5484d' : '#eef1f5';
+  bar.className = 'status ' + (state==='ok' ? 'ok' : state==='err' ? 'err' : 'idle');
 }
 
 function readConstants(){
@@ -374,19 +707,35 @@ function runSolve(){
     drawChart(result); // redraw now that the graph tab is actually visible (correct wrap width)
     setStatus('Solved successfully - mass balance closed within tolerance.', 'ok');
   }catch(e){
-    document.getElementById('convInfo').textContent = '[FAILED]\n' + e.message;
+    document.getElementById('convInfo').innerHTML = '<span class="tag fail">FAILED</span>' + e.message;
     setStatus('ERROR: ' + e.message, 'err');
-    alert(e.message);
   }
 }
 
+function apiGravity(densityKgM3){
+  const sg = densityKgM3 / 1000.0;
+  return 141.5/sg - 131.5;
+}
+
 function populateResults(result, alsoDrawChart=true){
-  const yb = document.querySelector('#yieldTable tbody');
-  yb.innerHTML = '';
-  for(const lump of LUMP_ORDER){
-    yb.innerHTML += `<tr><td>${LUMP_LABELS[lump]}</td><td>${result.yieldsWtPct[lump].toFixed(3)}</td>
-      <td>${result.massRatesTph[lump].toFixed(2)}</td><td>${result.totalMassT[lump].toFixed(1)}</td></tr>`;
-  }
+  const setCard = (pctId, subId, pct, rateTph, massT) => {
+    document.getElementById(pctId).textContent = pct.toFixed(2) + '%';
+    document.getElementById(subId).textContent = `${rateTph.toFixed(2)} t/h \u00b7 ${massT.toFixed(1)} t/cycle`;
+  };
+  setCard('cardGasPct','cardGasSub', result.yieldsWtPct.gas, result.massRatesTph.gas, result.totalMassT.gas);
+  setCard('cardDistPct','cardDistSub', result.yieldsWtPct.distillate, result.massRatesTph.distillate, result.totalMassT.distillate);
+  setCard('cardCokePct','cardCokeSub', result.yieldsWtPct.coke, result.massRatesTph.coke, result.totalMassT.coke);
+  document.getElementById('cardResiduePct').textContent = result.unconvertedResiduePct.toFixed(3) + '%';
+
+  const cc0 = result.cokeChamber;
+  document.getElementById('cardHeight').textContent = cc0.HTtotal.toFixed(3) + ' m';
+  document.getElementById('cardHeightSub').textContent =
+    `cylinder ${cc0.HTcyl.toFixed(3)} m + knuckle ${KNUCKLE_HEIGHT_M.toFixed(3)} m`;
+
+  const {density} = readConstants();
+  document.getElementById('footApi').textContent = apiGravity(density).toFixed(2);
+  document.getElementById('footDuration').textContent = result.totalCycleTimeH.toFixed(2) + ' h';
+  document.getElementById('footPoints').textContent = result.stitchedT.length;
 
   const sb = document.querySelector('#segTable tbody');
   sb.innerHTML = '';
@@ -406,10 +755,9 @@ Knuckle height: ${KNUCKLE_HEIGHT_M.toFixed(3)} m
 TOTAL COKE BED HEIGHT: ${cc.HTtotal.toFixed(3)} m
 Chamber occupancy: ${cc.occupancyPct.toFixed(2)} %`;
 
-  document.getElementById('convInfo').textContent =
-`[OK]
-Mass balance residual: ${result.massBalanceResidual.toExponential(3)} (tolerance 1e-6)
-All yields within physical bounds [0, 100]%: PASSED
+  document.getElementById('convInfo').innerHTML =
+`<span class="tag pass">OK</span>Mass balance residual: ${result.massBalanceResidual.toExponential(3)} (tolerance 1e-6)
+<span class="tag pass">PASSED</span>All yields within physical bounds [0, 100]%
 Segments solved: ${result.segments.length} (state carried forward between stages, not reset to fresh feed at each stage).`;
 
   if(alsoDrawChart) drawChart(result);
@@ -443,7 +791,7 @@ function runValidation(){
     };
 
     let allPass = true;
-    let lines = [`[BASE CASE] single-stage, ${baseThroughput} m3/h x ${totalH.toFixed(1)} h -> coke ${baseCoke.toFixed(6)} wt%, bed height ${baseHt.toFixed(6)} m\n`];
+    let lines = [`<span class="tag pass">BASE CASE</span>single-stage, ${baseThroughput} m3/h x ${totalH.toFixed(1)} h -> coke ${baseCoke.toFixed(6)} wt%, bed height ${baseHt.toFixed(6)} m\n`];
     lines.push('Test case'.padEnd(34) + 'coke wt% rel.err'.padStart(18) + '  height rel.err'.padStart(18) + '  status');
     for(const [name, sched] of Object.entries(tests)){
       const res = solvePiecewise(sched, density, ccr, temp);
@@ -453,13 +801,13 @@ function runValidation(){
       allPass = allPass && ok;
       lines.push(name.padEnd(34) + cErr.toExponential(3).padStart(18) + '  ' + hErr.toExponential(3).padStart(16) + '  ' + (ok?'PASS':'FAIL'));
     }
-    lines.push('\n' + (allPass ? '[VALIDATION PASSED] Safe to trust the piecewise solve for these constants.'
-                                : '[VALIDATION FAILED] Do not trust results until this is fixed.'));
+    lines.push('\n' + (allPass ? '<span class="tag pass">VALIDATION PASSED</span>Safe to trust the piecewise solve for these constants.'
+                                : '<span class="tag fail">VALIDATION FAILED</span>Do not trust results until this is fixed.'));
 
-    document.getElementById('convInfo').textContent = lines.join('\n');
+    document.getElementById('convInfo').innerHTML = lines.join('\n');
     setStatus('Validation complete - see Convergence panel.', allPass?'ok':'err');
   }catch(e){
-    document.getElementById('convInfo').textContent = '[FAILED]\n' + e.message;
+    document.getElementById('convInfo').innerHTML = '<span class="tag fail">FAILED</span>' + e.message;
     setStatus('ERROR: ' + e.message, 'err');
   }
 }
@@ -511,7 +859,7 @@ function drawChart(result){
   const yAt = vv => H - padB - (vv / maxY) * (H - padT - padB);
 
   // horizontal gridlines
-  ctx.strokeStyle = '#eef1f5';
+  ctx.strokeStyle = '#2b343d';
   ctx.lineWidth = 1;
   const yTicks = 5;
   for (let i = 0; i <= yTicks; i++) {
@@ -522,8 +870,8 @@ function drawChart(result){
     ctx.stroke();
   }
 
-  // segment boundary dashed lines + labels
-  ctx.strokeStyle = '#c3cad4';
+  // segment boundary dashed lines
+  ctx.strokeStyle = '#3a4550';
   ctx.setLineDash([4, 3]);
   let cursor = 0;
   result.segments.slice(0, -1).forEach(s => {
@@ -536,14 +884,14 @@ function drawChart(result){
   ctx.setLineDash([]);
 
   // axes
-  ctx.strokeStyle = '#8b93a1';
+  ctx.strokeStyle = '#8b98a3';
   ctx.lineWidth = 1.3;
   ctx.beginPath();
   ctx.moveTo(padL, padT); ctx.lineTo(padL, H - padB); ctx.lineTo(W - padR, H - padB);
   ctx.stroke();
 
-  ctx.fillStyle = '#1b212c';
-  ctx.font = '11px Segoe UI';
+  ctx.fillStyle = '#dde3e8';
+  ctx.font = '11px "IBM Plex Mono", Consolas, monospace';
   ctx.textAlign = 'center';
   const xTicks = Math.min(12, Math.max(4, Math.round(maxT)));
   for (let i = 0; i <= xTicks; i++) {
@@ -562,8 +910,8 @@ function drawChart(result){
   ctx.textAlign = 'center';
   ctx.fillText('Time (h)', (padL + W - padR) / 2, H - 6);
 
-  // series - smooth lines + subtle fill under coke/distillate for readability
-  const colors = { gas: '#ff8a3d', distillate: '#3fb8af', coke: '#3a3f47', vr: '#8b93a1' };
+  // series - smooth lines with markers
+  const colors = { gas: '#5b9bd5', distillate: '#4fb3a3', coke: '#d9820c', vr: '#6b7785' };
   const drawOrder = ['vr', 'gas', 'distillate', 'coke'];
   for (const name of drawOrder) {
     const vals = series[name];
